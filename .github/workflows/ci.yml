@@ -1,0 +1,25 @@
+name: 369 V3 CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Python compile
+        run: python -m compileall -q app
+      - name: Engine tests
+        run: python -m pytest -q
+      - name: JavaScript syntax
+        run: node --check app/static/app.js
