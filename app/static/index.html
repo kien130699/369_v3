@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <title>369 V3 · Live 20 Bots</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <header class="topbar">
+    <div class="brand"><div class="brand-mark"><span>3</span><span>6</span><span>9</span></div><div><strong>F3 LIVE COMMAND CENTER</strong><small>20 BOT ĐỘC LẬP · XAU M1 · PAPER EXECUTION</small></div></div>
+    <div class="market-strip">
+      <div class="market-item price-item"><small>XAUUSDc</small><strong id="marketPrice">—</strong><span id="marketSpread">spread —</span></div>
+      <div class="market-item"><small>MT5 SOURCE</small><strong id="sourceState" class="status-text muted">CONNECTING</strong><span id="sourceTime">127.0.0.1:3333</span></div>
+      <div class="market-item"><small>LAST CLOSED M1</small><strong id="lastBar">—</strong><span>tín hiệu chỉ khóa bằng nến đóng</span></div>
+    </div>
+    <div class="top-actions"><button id="engineButton" class="control-btn running"><i></i><span>ENGINE LIVE</span></button><button id="exportAll" class="icon-btn">CSV</button></div>
+  </header>
+
+  <main class="workspace">
+    <aside class="bot-sidebar panel">
+      <div class="panel-head sidebar-head"><div><span class="eyebrow">BOT MATRIX</span><h2>20 bộ phím lệnh</h2></div><span id="activeCount" class="counter">0 active</span></div>
+      <div class="bot-filters"><button class="filter active" data-filter="ALL">Tất cả</button><button class="filter" data-filter="UP">BUY</button><button class="filter" data-filter="DOWN">SELL</button><button class="filter" data-filter="ACTIVE">Đang chạy</button></div>
+      <div id="botList" class="bot-list"><div class="loading-card">Đang tải 20 bot…</div></div>
+    </aside>
+
+    <section class="main-stage">
+      <section class="hero-grid">
+        <article class="chart-panel panel">
+          <div class="panel-head chart-head"><div><span class="eyebrow">LIVE MARKET</span><h2>XAU · M1 cấu trúc 369</h2></div><div class="legend"><span><i class="line close"></i>Close</span><span><i class="line zone"></i>Vùng bot chọn</span></div></div>
+          <div class="chart-wrap"><canvas id="priceChart"></canvas><div id="chartOverlay" class="chart-overlay"><div><small>SELECTED BOT</small><strong id="chartBot">B01</strong></div><div><small>STATE</small><strong id="chartState">WAIT</strong></div><div><small>BASE</small><strong id="chartBase">—</strong></div></div></div>
+        </article>
+
+        <article class="signal-panel panel">
+          <div class="signal-top"><div><span class="eyebrow">SELECTED BOT</span><div class="bot-title-row"><span id="selectedRank" class="rank-chip">#01</span><h1 id="selectedName">BUY 79–83 · Fast 15</h1></div><p id="selectedDescription">Đang tải cấu hình…</p></div><div id="selectedSide" class="side-badge buy">BUY</div></div>
+          <div class="state-ribbon"><div id="stepWait" class="state-step active"><span>1</span><b>WAIT</b><small>chờ phá 1</small></div><i></i><div id="stepFirst" class="state-step"><span>2</span><b>FIRST</b><small>đã phá cấu trúc 1</small></div><i></i><div id="stepSecond" class="state-step"><span>3</span><b>SECOND</b><small>đã phá cấu trúc 2</small></div><i></i><div id="stepOrder" class="state-step"><span>4</span><b>ORDER</b><small>DCA / quản lý</small></div></div>
+          <div class="order-layout"><div class="order-card entries"><span class="card-label">DCA LADDER</span><div id="entryLevels" class="entry-levels"></div></div><div class="order-card risk"><span class="card-label">RISK MAP</span><div class="risk-grid"><div><small>SL</small><strong id="levelSl" class="red">—</strong></div><div><small>T1</small><strong id="levelT1" class="amber">—</strong></div><div><small>T2</small><strong id="levelT2" class="green">—</strong></div><div><small>POLICY</small><strong id="exitPolicy">—</strong></div></div></div></div>
+          <div id="signalMessage" class="signal-message neutral"><span class="pulse-dot"></span><div><b>Đang theo dõi cấu trúc</b><small>Bot sẽ phím lệnh sau khi phá hai cấu trúc và hồi giao thoa thứ hai.</small></div></div>
+        </article>
+      </section>
+
+      <section class="metrics-row">
+        <article class="metric-card"><span>Closed trades</span><strong id="metricClosed">0</strong><small id="metricWL">0W / 0L</small></article>
+        <article class="metric-card"><span>Win rate</span><strong id="metricWr">0.0%</strong><small>lịch sử riêng bot</small></article>
+        <article class="metric-card"><span>AvgR</span><strong id="metricAvgR">+0.000R</strong><small>đã trừ spread 0.30</small></article>
+        <article class="metric-card"><span>Profit factor</span><strong id="metricPf">0.000</strong><small>gross profit / loss</small></article>
+        <article class="metric-card"><span>Total R</span><strong id="metricTotalR">+0.00R</strong><small id="metricDd">Max DD 0.00R</small></article>
+        <article class="metric-card benchmark"><span>Backtest reference</span><strong id="metricBenchmark">+0.383R</strong><small id="metricBenchmarkSub">Test WR 65.6% · PF 2.035</small></article>
+      </section>
+
+      <section class="bottom-grid">
+        <article class="history-panel panel">
+          <div class="panel-head table-head"><div><span class="eyebrow">BOT-SPECIFIC JOURNAL</span><h2 id="historyTitle">Lịch sử B01</h2></div><div class="table-actions"><select id="tradeStatusFilter"><option value="">Tất cả trạng thái</option><option value="PENDING">Pending</option><option value="OPEN">Open</option><option value="RUNNER">Runner</option><option value="CLOSED">Closed</option><option value="CANCELLED">Cancelled</option></select><button id="exportBot" class="small-btn">Xuất bot CSV</button></div></div>
+          <div class="table-scroll"><table><thead><tr><th>Thời gian</th><th>Family</th><th>Side</th><th>Trạng thái</th><th>DCA</th><th>Avg entry</th><th>SL</th><th>T1 / T2</th><th>Exit</th><th>R</th></tr></thead><tbody id="tradeRows"><tr><td colspan="10" class="empty">Chưa có lệnh live.</td></tr></tbody></table></div>
+        </article>
+        <article class="feed-panel panel"><div class="panel-head"><div><span class="eyebrow">REALTIME EVENT TAPE</span><h2>Phím lệnh & trạng thái</h2></div><span class="live-pill"><i></i>LIVE</span></div><div id="eventFeed" class="event-feed"><div class="empty-feed">Đang chờ sự kiện…</div></div></article>
+      </section>
+
+      <section class="all-signals panel"><div class="panel-head"><div><span class="eyebrow">20-BOT SIGNAL BOARD</span><h2>Toàn bộ trạng thái phím lệnh live</h2></div><span class="caption">Mỗi bot có state, lệnh và lịch sử độc lập</span></div><div id="signalBoard" class="signal-board"></div></section>
+    </section>
+  </main>
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
