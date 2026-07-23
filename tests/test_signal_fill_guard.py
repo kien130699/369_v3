@@ -52,7 +52,7 @@ def test_next_closed_bar_can_fill_only_levels_it_reaches():
     runtime._process_trade(signal_bar, record=True)
     assert runtime.active_trade["fills"] == []
 
-    runtime._process_trade(bar(1, 4020, 4021.2, 4019.5, 4020.5), record=True)
+    runtime._process_trade(bar(1, 4020, 4021.2, 4018.5, 4020.5), record=True)
     filled_prices = [fill["price"] for fill in runtime.active_trade["fills"]]
     assert filled_prices == [4019.0, 4021.0]
     assert 4023.0 not in filled_prices
