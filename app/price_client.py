@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -37,13 +38,15 @@ class PriceServerClient:
     async def health(self) -> dict[str, Any]:
         response = await self.client.get(f"{self.base_url}/health")
         response.raise_for_status()
-        return response.json()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Price server returned an unsupported health payload")
+        return payload
 
     async def price(self, symbol: str) -> dict[str, Any]:
         response = await self.client.get(f"{self.base_url}/api/price", params={"symbol": symbol})
         response.raise_for_status()
-        payload = response.json()
-        return self._unwrap_price(payload)
+        return self._validate_price(self._unwrap_price(response.json()))
 
     async def bars(self, symbol: str, timeframe: str, count: int) -> list[Bar]:
         response = await self.client.get(
@@ -51,8 +54,7 @@ class PriceServerClient:
             params={"symbol": symbol, "tf": timeframe, "count": count},
         )
         response.raise_for_status()
-        payload = response.json()
-        raw = self._unwrap_bars(payload)
+        raw = self._unwrap_bars(response.json())
         bars = [self._parse_bar(item) for item in raw]
         bars.sort(key=lambda bar: bar.epoch)
         dedup: dict[int, Bar] = {bar.epoch: bar for bar in bars}
@@ -68,10 +70,29 @@ class PriceServerClient:
         if isinstance(payload, dict):
             for key in ("price", "data", "result"):
                 value = payload.get(key)
-                if isinstance(value, dict) and any(k in value for k in ("bid", "ask", "last")):
+                if isinstance(value, dict) and any(k in value for k in ("bid", "ask", "last", "price")):
                     return value
             return payload
         raise ValueError("Price server returned an unsupported price payload")
+
+    @staticmethod
+    def _validate_price(payload: dict[str, Any]) -> dict[str, Any]:
+        bid_raw = payload.get("bid", payload.get("Bid"))
+        ask_raw = payload.get("ask", payload.get("Ask"))
+        last_raw = payload.get("last", payload.get("price"))
+        values: dict[str, float] = {}
+        for name, raw in (("bid", bid_raw), ("ask", ask_raw), ("last", last_raw)):
+            if raw is None:
+                continue
+            value = float(raw)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"Invalid {name} price: {raw!r}")
+            values[name] = value
+        if not values:
+            raise ValueError("Price payload has no usable bid/ask/last value")
+        if "bid" in values and "ask" in values and values["bid"] > values["ask"]:
+            raise ValueError(f"Invalid spread: bid {values['bid']} > ask {values['ask']}")
+        return payload
 
     @staticmethod
     def _unwrap_bars(payload: Any) -> list[Any]:
@@ -102,16 +123,20 @@ class PriceServerClient:
             volume = raw[5] if len(raw) > 5 else 0
         else:
             raise ValueError(f"Unsupported bar item: {raw!r}")
+        if timestamp is None or any(value is None for value in (open_, high, low, close)):
+            raise ValueError(f"Incomplete OHLC bar: {raw!r}")
         dt = cls._parse_time(timestamp)
-        return Bar(
-            timestamp=dt.isoformat(),
-            epoch=int(dt.timestamp()),
-            open=float(open_),
-            high=float(high),
-            low=float(low),
-            close=float(close),
-            volume=float(volume or 0),
-        )
+        o, h, l, c = map(float, (open_, high, low, close))
+        v = float(volume or 0)
+        if not all(math.isfinite(value) for value in (o, h, l, c, v)):
+            raise ValueError(f"Non-finite OHLC bar: {raw!r}")
+        if min(o, h, l, c) <= 0:
+            raise ValueError(f"Non-positive OHLC bar: {raw!r}")
+        if h < l or h < max(o, c) or l > min(o, c):
+            raise ValueError(f"Invalid OHLC ordering: {raw!r}")
+        if v < 0:
+            raise ValueError(f"Negative volume: {raw!r}")
+        return Bar(timestamp=dt.isoformat(), epoch=int(dt.timestamp()), open=o, high=h, low=l, close=c, volume=v)
 
     @staticmethod
     def _parse_time(value: Any) -> datetime:
