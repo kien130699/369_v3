@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#07111f">
   <title>369 V3 · Live 20 Bots</title>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/audit_patch.css">
 </head>
 <body>
   <div class="noise"></div>
@@ -15,9 +16,11 @@
       <div class="market-item price-item"><small>XAUUSDc</small><strong id="marketPrice">—</strong><span id="marketSpread">spread —</span></div>
       <div class="market-item"><small>MT5 SOURCE</small><strong id="sourceState" class="status-text muted">CONNECTING</strong><span id="sourceTime">127.0.0.1:3333</span></div>
       <div class="market-item"><small>LAST CLOSED M1</small><strong id="lastBar">—</strong><span>tín hiệu chỉ khóa bằng nến đóng</span></div>
+      <div class="market-item"><small>LOGIC PROFILE</small><strong id="logicProfile">—</strong><span id="benchmarkProfile">benchmark —</span></div>
     </div>
     <div class="top-actions"><button id="engineButton" class="control-btn running"><i></i><span>ENGINE LIVE</span></button><button id="exportAll" class="icon-btn">CSV</button></div>
   </header>
+  <div id="safetyBanner" class="safety-banner" hidden></div>
 
   <main class="workspace">
     <aside class="bot-sidebar panel">
@@ -47,7 +50,7 @@
         <article class="metric-card"><span>AvgR</span><strong id="metricAvgR">+0.000R</strong><small>đã trừ spread 0.30</small></article>
         <article class="metric-card"><span>Profit factor</span><strong id="metricPf">0.000</strong><small>gross profit / loss</small></article>
         <article class="metric-card"><span>Total R</span><strong id="metricTotalR">+0.00R</strong><small id="metricDd">Max DD 0.00R</small></article>
-        <article class="metric-card benchmark"><span>Backtest reference</span><strong id="metricBenchmark">+0.383R</strong><small id="metricBenchmarkSub">Test WR 65.6% · PF 2.035</small></article>
+        <article class="metric-card benchmark"><span>Legacy backtest reference</span><strong id="metricBenchmark">+0.383R</strong><small id="metricBenchmarkSub">Test WR 65.6% · PF 2.035</small></article>
       </section>
 
       <section class="bottom-grid">
@@ -63,5 +66,6 @@
   </main>
   <div id="toast" class="toast"></div>
   <script src="/static/app.js" defer></script>
+  <script src="/static/audit_patch.js" defer></script>
 </body>
 </html>
