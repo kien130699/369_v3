@@ -24,6 +24,7 @@ Web server local chạy **20 bot F3 độc lập** trên dữ liệu XAU từ MT
 - Warmup lần đầu không biến position lịch sử thành lệnh live, trừ khi bật cấu hình riêng.
 - Snapshot thiếu hoặc snapshot logic cũ được reset theo từng bot, không backfill ghi lịch sử giả.
 - CSV export stream toàn bộ lịch sử, không còn giới hạn 5.000 lệnh.
+- Dùng database v0.2 riêng để không trộn lịch sử `legacy_backtest` với `teacher_v2`.
 
 ## Logic profile
 
@@ -95,12 +96,14 @@ WARMUP_BARS=3000
 LIVE_BARS_COUNT=30
 MAX_BACKFILL_BARS=10000
 BACKTEST_SPREAD=0.30
-DATABASE_PATH=data/369_live.sqlite3
+DATABASE_PATH=data/369_live_v02_teacher.sqlite3
 BAR_CLOSE_DELAY_SECONDS=3
 STRUCTURE_PROFILE=teacher_v2
 RESUME_HISTORICAL_POSITIONS=false
 TRACKER_TTL_BARS=1440
 ```
+
+Database cũ `data/369_live.sqlite3` không bị xóa. Chỉ đặt `DATABASE_PATH` về file cũ khi cố ý tiếp tục profile legacy.
 
 Nếu outage dài hơn khả năng `/api/bars` trả về, tăng `MAX_BACKFILL_BARS`. Engine sẽ không START khi vẫn còn `data_gap`.
 
@@ -143,10 +146,10 @@ bot_id,signal_time,family,direction,base,status,reason,r_value
 
 ## Dữ liệu
 
-SQLite mặc định:
+SQLite mặc định của v0.2:
 
 ```text
-data/369_live.sqlite3
+data/369_live_v02_teacher.sqlite3
 ```
 
 Không xóa file này nếu muốn giữ lịch sử. Fill trên web là `MODEL_FILL_M1_RANGE`, không phải xác nhận khớp thật từ broker.
