@@ -53,13 +53,16 @@ def continuity_gap(
     bars: list[EpochBar],
     interval_seconds: int,
     expected_latest_epoch: int | None = None,
+    close_delay_seconds: int = 3,
 ) -> dict | None:
     if last_epoch is None:
         return None
+    if expected_latest_epoch is None:
+        expected_latest_epoch = closed_boundary(interval_seconds, close_delay_seconds) - interval_seconds
     newer = sorted(bar.epoch for bar in bars if bar.epoch > last_epoch)
     expected = last_epoch + interval_seconds
     if not newer:
-        if expected_latest_epoch is not None and last_epoch < expected_latest_epoch:
+        if last_epoch < expected_latest_epoch:
             return {
                 "last_epoch": last_epoch,
                 "expected_next_epoch": expected,
