@@ -48,13 +48,26 @@ def required_bar_count(
     )
 
 
-def continuity_gap(last_epoch: int | None, bars: list[EpochBar], interval_seconds: int) -> dict | None:
+def continuity_gap(
+    last_epoch: int | None,
+    bars: list[EpochBar],
+    interval_seconds: int,
+    expected_latest_epoch: int | None = None,
+) -> dict | None:
     if last_epoch is None:
         return None
     newer = sorted(bar.epoch for bar in bars if bar.epoch > last_epoch)
-    if not newer:
-        return None
     expected = last_epoch + interval_seconds
+    if not newer:
+        if expected_latest_epoch is not None and last_epoch < expected_latest_epoch:
+            return {
+                "last_epoch": last_epoch,
+                "expected_next_epoch": expected,
+                "first_received_epoch": None,
+                "missing_bars": max(1, (expected_latest_epoch - last_epoch) // interval_seconds),
+                "source_stale": True,
+            }
+        return None
     if newer[0] <= expected:
         return None
     missing = max(1, (newer[0] - expected) // interval_seconds)
@@ -63,4 +76,5 @@ def continuity_gap(last_epoch: int | None, bars: list[EpochBar], interval_second
         "expected_next_epoch": expected,
         "first_received_epoch": newer[0],
         "missing_bars": missing,
+        "source_stale": False,
     }
