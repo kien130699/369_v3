@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .backfill import continuity_gap, required_bar_count
+from .backfill import closed_boundary, continuity_gap, required_bar_count
 from .bots import BOT_MAP, BOTS
 from .config import settings
 from .engine import MultiBotEngine
@@ -66,6 +66,25 @@ engine = MultiBotEngine(
     structure_profile=settings.structure_profile,
     tracker_ttl_bars=settings.tracker_ttl_bars,
 )
+
+
+def _sanitize_restored_profiles() -> int:
+    resets = 0
+    for runtime in engine.runtimes.values():
+        active_profile = ((runtime.active_trade or {}).get("metadata") or {}).get("logic_profile")
+        signal_profile = (runtime.last_signal or {}).get("logic_profile")
+        restored_profile = active_profile or signal_profile
+        if runtime.last_bar_epoch is not None and restored_profile != settings.structure_profile:
+            runtime.trackers.clear()
+            runtime.active_trade = None
+            runtime.current_state = "WAIT"
+            runtime.current_base = None
+            runtime.last_signal = None
+            resets += 1
+    return resets
+
+
+profile_resets = _sanitize_restored_profiles()
 runtime_status: dict[str, Any] = {
     "source_ok": False,
     "mt5": False,
@@ -81,6 +100,7 @@ runtime_status: dict[str, Any] = {
     "required_bars": 0,
     "backfill_capped": False,
     "data_gap": None,
+    "profile_resets": profile_resets,
 }
 
 
@@ -95,16 +115,15 @@ def _timeframe_seconds(tf: str) -> int:
 
 def _closed_bars(bars: list[Bar]) -> list[Bar]:
     interval = _timeframe_seconds(settings.timeframe)
-    plan = required_bar_count(
-        engine.oldest_bar_epoch(), interval, settings.live_bars_count, settings.warmup_bars,
-        settings.max_backfill_bars, settings.close_delay_seconds,
-    )
-    return [bar for bar in bars if bar.epoch < plan.boundary]
+    boundary = closed_boundary(interval, settings.close_delay_seconds)
+    return [bar for bar in bars if bar.epoch < boundary]
 
 
 def _plan_bar_request() -> tuple[int, int, bool]:
+    coverage = engine.snapshot_coverage()
+    planning_epoch = engine.oldest_bar_epoch() if all(coverage.values()) else None
     plan = required_bar_count(
-        engine.oldest_bar_epoch(),
+        planning_epoch,
         _timeframe_seconds(settings.timeframe),
         settings.live_bars_count,
         settings.warmup_bars,
@@ -125,7 +144,9 @@ def _validate_health(health: dict[str, Any]) -> None:
 
 
 def _check_continuity(closed: list[Bar]) -> dict[str, Any] | None:
-    gap = continuity_gap(engine.oldest_bar_epoch(), closed, _timeframe_seconds(settings.timeframe))
+    interval = _timeframe_seconds(settings.timeframe)
+    expected_latest = closed_boundary(interval, settings.close_delay_seconds) - interval
+    gap = continuity_gap(engine.oldest_bar_epoch(), closed, interval, expected_latest, settings.close_delay_seconds)
     if gap is None:
         return None
     gap.update({
@@ -185,6 +206,8 @@ async def _bootstrap() -> None:
             _set_gap(gap)
             return
         result = engine.bootstrap(closed, resume_historical_positions=settings.resume_historical_positions)
+        for runtime in engine.runtimes.values():
+            storage.save_snapshot(runtime.preset.id, runtime.snapshot())
         processed = result["warmed_runtime_bars"] + result["caught_up_runtime_bars"]
         runtime_status.update(
             last_health=health,
@@ -202,7 +225,7 @@ async def _bootstrap() -> None:
             "Live engine đã khởi động",
             (
                 f"Nguồn {settings.price_server}; profile={settings.structure_profile}; "
-                f"warmup/catch-up {processed} runtime-bars; 20 bot sẵn sàng."
+                f"warmup/catch-up {processed} runtime-bars; profile reset {profile_resets}; 20 bot sẵn sàng."
             ),
             {"processed": processed, "symbol": settings.symbol, "profile": settings.structure_profile, **result},
         )
