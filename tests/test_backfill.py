@@ -29,5 +29,12 @@ def test_gap_is_detected_and_never_silently_skipped():
     assert gap["missing_bars"] == 2
 
 
+def test_stale_source_without_newer_bars_is_a_gap():
+    gap = continuity_gap(1_000_000, [B(999_940), B(1_000_000)], 60, expected_latest_epoch=1_000_300)
+    assert gap is not None
+    assert gap["source_stale"] is True
+    assert gap["missing_bars"] == 5
+
+
 def test_contiguous_backfill_is_allowed():
     assert continuity_gap(1_000_000, [B(1_000_060), B(1_000_120)], 60) is None
