@@ -24,7 +24,10 @@ class Settings:
     live_bars_count: int = int(os.getenv("LIVE_BARS_COUNT", "30"))
     max_backfill_bars: int = int(os.getenv("MAX_BACKFILL_BARS", "10000"))
     spread: float = float(os.getenv("BACKTEST_SPREAD", "0.30"))
-    database_path: Path = Path(os.getenv("DATABASE_PATH", "data/369_live_v02_teacher.sqlite3"))
+    # v0.2.1 changes paper-fill timing: signal-candle ranges can no longer fill
+    # orders retroactively. Use a new DB by default so incompatible fills from
+    # v0.2 are never restored as live positions.
+    database_path: Path = Path(os.getenv("DATABASE_PATH", "data/369_live_v021_teacher.sqlite3"))
     close_delay_seconds: int = int(os.getenv("BAR_CLOSE_DELAY_SECONDS", "3"))
     structure_profile: str = os.getenv("STRUCTURE_PROFILE", "teacher_v2").strip().lower()
     resume_historical_positions: bool = _env_bool("RESUME_HISTORICAL_POSITIONS", False)

@@ -22,7 +22,9 @@ def test_buy_f3_signal_fill_and_tp2():
         bar(1, 4050, 4060, 4050, 4058),
         bar(2, 4058, 4088, 4058, 4087),
         bar(3, 4087, 4088, 4082, 4082.5),
-        bar(4, 4082.5, 4082.5, 4078, 4079.5),
+        # Signal is known only after bar 3 closes. Bar 4 is the first eligible
+        # execution candle and deliberately reaches all three DCA levels.
+        bar(4, 4082.5, 4083.2, 4078, 4079.5),
         bar(5, 4079.5, 4091, 4079, 4090),
     ]
     events = []
