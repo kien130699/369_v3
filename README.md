@@ -4,21 +4,55 @@ Web server local chạy **20 bot F3 độc lập** trên dữ liệu XAU từ MT
 
 ## Chức năng
 
-- Poll realtime giá XAU mỗi 2 giây từ `/api/price?symbol=XAU`.
-- Chỉ khóa tín hiệu và paper execution bằng **nến M1 đã đóng** từ `/api/bars` để giữ logic causal như backtest.
-- 20 bot Top 20 chạy cùng lúc; mỗi bot có preset, state machine, lệnh và lịch sử riêng.
-- F3 state machine: phá cấu trúc thứ nhất → phá cấu trúc thứ hai → hồi giao thoa thứ hai → phím DCA.
-- DCA 3 mức, volume `1:2:3` hoặc `1:1.5:2` tùy bot.
-- Hai cách thoát: FULL tới T2 hoặc chốt 70% tại T1, kéo runner về hòa vốn.
-- SQLite lưu lệnh, fill, partial, close, R, event và snapshot để restart không mất trạng thái.
-- Dashboard realtime, event tape, signal board 20 bot, lịch sử riêng và export CSV.
+- Poll bid/ask XAU mỗi 2 giây từ `/api/price?symbol=XAU`.
+- Tín hiệu và paper execution chỉ dùng **nến M1 đã đóng**.
+- 20 bot Top 20 chạy cùng lúc; mỗi bot có state, DCA, lệnh, lịch sử và thống kê riêng.
+- SQLite lưu trade, fill, partial, close, event và snapshot.
+- Dashboard realtime bằng SSE; export CSV riêng từng bot hoặc toàn bộ lịch sử.
+- Một bot chỉ có một lệnh active; setup chồng lấn được tiêu thụ để không phát lại tracker cũ.
 
-> Đây là paper-trading/live-signal server. Bản này **không tự bấm lệnh MT5**.
+> Đây là live signal + paper execution. Chưa tự gửi lệnh thật vào MT5.
+
+## Bản sửa an toàn v0.2
+
+- Tự tính số nến phải backfill sau pause, sleep, mất kết nối hoặc restart.
+- Nếu bars API không trả đủ chuỗi M1 liên tục, engine **fail-closed và tự PAUSE**; không bỏ qua nến âm thầm.
+- Tracker FIRST/SECOND vẫn được cập nhật và vô hiệu hóa khi một lệnh đang mở.
+- Tracker nằm ngoài vùng giá hiện tại được dọn, tránh tín hiệu cũ và tăng bộ nhớ.
+- Partial 70% rồi kéo BE trong cùng nến dùng thứ tự bảo thủ: nếu nến cũng chạm BE thì runner đóng BE trước T2.
+- Reject dữ liệu giá lỗi, bid > ask, OHLC vô lý, NaN hoặc volume âm.
+- Warmup lần đầu không biến position lịch sử thành lệnh live, trừ khi bật cấu hình riêng.
+- Snapshot thiếu hoặc snapshot logic cũ được reset theo từng bot, không backfill ghi lịch sử giả.
+- CSV export stream toàn bộ lịch sử, không còn giới hạn 5.000 lệnh.
+
+## Logic profile
+
+Mặc định:
+
+```text
+STRUCTURE_PROFILE=teacher_v2
+```
+
+`teacher_v2` dùng trạng thái mở xuống đã audit:
+
+```text
+46 -> 44.4
+16 -> 14.4
+06 -> 04.4
+```
+
+Có thể quay lại logic báo cáo cũ:
+
+```text
+STRUCTURE_PROFILE=legacy_backtest
+```
+
+Các số benchmark Top 20 hiện hiển thị trên dashboard thuộc `legacy_backtest`. Vì vậy khi chạy `teacher_v2`, benchmark được ghi rõ là **Legacy backtest reference**, không được coi là parity mới.
 
 ## Yêu cầu
 
 - Windows và Python 3.11 trở lên.
-- Server MT5 đang chạy tại `http://127.0.0.1:3333` với các API:
+- Server MT5 tại `http://127.0.0.1:3333`:
 
 ```text
 GET /health
@@ -26,7 +60,7 @@ GET /api/price?symbol=XAU
 GET /api/bars?symbol=XAU&tf=M1&count=300
 ```
 
-## Chạy nhanh
+## Chạy
 
 Nhấp đúp:
 
@@ -34,16 +68,10 @@ Nhấp đúp:
 start_live_web.bat
 ```
 
-Sau đó mở:
+Mở:
 
 ```text
 http://127.0.0.1:3690
-```
-
-PowerShell:
-
-```powershell
-.\start_live_web.ps1
 ```
 
 Chạy thủ công:
@@ -64,19 +92,27 @@ SYMBOL=XAU
 TIMEFRAME=M1
 POLL_SECONDS=2
 WARMUP_BARS=3000
+LIVE_BARS_COUNT=30
+MAX_BACKFILL_BARS=10000
 BACKTEST_SPREAD=0.30
 DATABASE_PATH=data/369_live.sqlite3
+BAR_CLOSE_DELAY_SECONDS=3
+STRUCTURE_PROFILE=teacher_v2
+RESUME_HISTORICAL_POSITIONS=false
+TRACKER_TTL_BARS=1440
 ```
 
-## API web server
+Nếu outage dài hơn khả năng `/api/bars` trả về, tăng `MAX_BACKFILL_BARS`. Engine sẽ không START khi vẫn còn `data_gap`.
+
+## API
 
 - `GET /api/status`
 - `GET /api/dashboard`
 - `GET /api/bots`
-- `GET /api/bots/B01`
+- `GET /api/bots/B01?limit=300&offset=0`
 - `GET /api/bots/B01/trades`
 - `GET /api/events`
-- `GET /api/stream` — SSE realtime
+- `GET /api/stream`
 - `POST /api/control/start`
 - `POST /api/control/pause`
 - `GET /api/source/health`
@@ -85,7 +121,27 @@ DATABASE_PATH=data/369_live.sqlite3
 - `GET /api/export/trades.csv`
 - `GET /api/export/trades.csv?bot_id=B01`
 
-## Dữ liệu và lịch sử
+## Replay và parity
+
+Công cụ replay dùng đúng `BotRuntime` của live engine:
+
+```powershell
+python tools/replay_csv.py XAUUSD_M1_2025_2026.csv --profile teacher_v2 --out replay_teacher_v2.csv
+```
+
+Kiểm tra với file reference:
+
+```powershell
+python tools/replay_csv.py data.csv --profile legacy_backtest --reference reference.csv --tolerance 0.002
+```
+
+Reference tối thiểu cần các cột:
+
+```text
+bot_id,signal_time,family,direction,base,status,reason,r_value
+```
+
+## Dữ liệu
 
 SQLite mặc định:
 
@@ -93,25 +149,4 @@ SQLite mặc định:
 data/369_live.sqlite3
 ```
 
-Không xóa file này nếu muốn giữ lịch sử riêng của 20 bot. Snapshot state được lưu sau mỗi nến đóng để restart không làm đổi lệnh đang chạy.
-
-## Logic causal
-
-1. Phá cấu trúc thứ nhất.
-2. Phá cấu trúc thứ hai.
-3. Chờ giá hồi giao thoa thứ hai.
-4. Phím DCA 3 mức theo preset từng bot.
-5. SL tại biên ngoài; T1 tại biên theo hướng; T2 tại node kế.
-6. Nếu SL và TP xuất hiện trong cùng một nến M1 thì ưu tiên SL.
-7. Sau khi chốt T1, các limit DCA chưa khớp bị hủy.
-8. Mỗi bot chỉ nhận một lệnh active tại một thời điểm, giống bước de-dup causal của backtest.
-
-## 20 bot
-
-20 preset nằm trong `app/bots.py`. Mỗi bot có:
-
-- cấu trúc BUY hoặc SELL riêng;
-- DCA weights riêng;
-- selector FULL/partial riêng;
-- state, lệnh, event và thống kê riêng;
-- lịch sử có thể xem và export riêng trên web.
+Không xóa file này nếu muốn giữ lịch sử. Fill trên web là `MODEL_FILL_M1_RANGE`, không phải xác nhận khớp thật từ broker.
