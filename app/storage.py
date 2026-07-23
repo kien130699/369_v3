@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 class Storage:
@@ -52,7 +52,6 @@ class Storage:
                     metadata_json TEXT NOT NULL DEFAULT '{}',
                     updated_at TEXT NOT NULL
                 );
-
                 CREATE INDEX IF NOT EXISTS idx_trades_bot_time ON trades(bot_id, signal_time DESC);
                 CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status, signal_time DESC);
 
@@ -153,7 +152,7 @@ class Storage:
         for row in result:
             try:
                 output[row["bot_id"]] = json.loads(row["state_json"])
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, TypeError):
                 continue
         return output
 
@@ -166,25 +165,54 @@ class Storage:
         if status:
             clauses.append("status = ?"); params.append(status)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        params.extend([min(max(limit, 1), 5000), max(offset, 0)])
+        params.extend([min(max(limit, 1), 100_000), max(offset, 0)])
         with self._lock:
             result = self._conn.execute(
                 f"SELECT * FROM trades {where} ORDER BY signal_time DESC LIMIT ? OFFSET ?", params
             ).fetchall()
         return [self._trade_row(row) for row in result]
 
+    def iter_trades(self, bot_id: str | None = None, status: str | None = None,
+                    batch_size: int = 1000) -> Iterator[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if bot_id:
+            clauses.append("bot_id = ?"); params.append(bot_id)
+        if status:
+            clauses.append("status = ?"); params.append(status)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        conn = sqlite3.connect(self.path)
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.execute(f"SELECT * FROM trades {where} ORDER BY signal_time DESC", params)
+            while True:
+                batch = cursor.fetchmany(max(1, batch_size))
+                if not batch:
+                    break
+                for row in batch:
+                    yield self._trade_row(row)
+        finally:
+            conn.close()
+
     def recent_events(self, bot_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         if bot_id:
             query = "SELECT * FROM events WHERE bot_id=? ORDER BY id DESC LIMIT ?"
-            params = (bot_id, min(max(limit, 1), 1000))
+            params = (bot_id, min(max(limit, 1), 5000))
         else:
             query = "SELECT * FROM events ORDER BY id DESC LIMIT ?"
-            params = (min(max(limit, 1), 1000),)
+            params = (min(max(limit, 1), 5000),)
         with self._lock:
             result = self._conn.execute(query, params).fetchall()
-        return [{"id": row["id"], "bot_id": row["bot_id"], "event_time": row["event_time"],
-                 "event_type": row["event_type"], "title": row["title"], "detail": row["detail"],
-                 "payload": json.loads(row["payload_json"] or "{}")} for row in result]
+        events = []
+        for row in result:
+            try:
+                payload = json.loads(row["payload_json"] or "{}")
+            except json.JSONDecodeError:
+                payload = {"decode_error": True}
+            events.append({"id": row["id"], "bot_id": row["bot_id"], "event_time": row["event_time"],
+                           "event_type": row["event_type"], "title": row["title"], "detail": row["detail"],
+                           "payload": payload})
+        return events
 
     def bot_metrics(self, bot_id: str) -> dict[str, Any]:
         with self._lock:
@@ -223,16 +251,21 @@ class Storage:
 
     @staticmethod
     def _trade_row(row: sqlite3.Row) -> dict[str, Any]:
+        def decode(value: str | None, fallback: Any) -> Any:
+            try:
+                return json.loads(value or "")
+            except json.JSONDecodeError:
+                return fallback
         return {"id":row["id"],"bot_id":row["bot_id"],"family":row["family"],
                 "direction":row["direction"],"base":row["base"],"signal_time":row["signal_time"],
                 "exit_time":row["exit_time"],"status":row["status"],"exit_policy":row["exit_policy"],
-                "lag":row["lag"],"levels":json.loads(row["levels_json"]),
-                "weights":json.loads(row["weights_json"]),"fills":json.loads(row["fills_json"]),
+                "lag":row["lag"],"levels":decode(row["levels_json"],[]),
+                "weights":decode(row["weights_json"],[]),"fills":decode(row["fills_json"],[]),
                 "avg_entry":row["avg_entry"],"stop":row["stop"],"t1":row["t1"],"t2":row["t2"],
                 "exit_price":row["exit_price"],"reason":row["reason"],"r_value":row["r_value"],
                 "realized_price_pnl":row["realized_price_pnl"],"open_weight":row["open_weight"],
                 "filled_weight":row["filled_weight"],"t1_done":bool(row["t1_done"]),
-                "runner_stop":row["runner_stop"],"metadata":json.loads(row["metadata_json"] or "{}"),
+                "runner_stop":row["runner_stop"],"metadata":decode(row["metadata_json"],{}),
                 "updated_at":row["updated_at"]}
 
     def close(self) -> None:
